@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors'
 import 'dotenv/config'
-import { MongoClient } from 'mongodb';
+import { MongoClient,ObjectId } from 'mongodb';
 const app = express();
 const port = 8000;
 app.use(cors());
@@ -55,6 +55,19 @@ app.post('/tuitions', async(req, res) => {
   const query=req.body
   const result=await tuitions.insertOne(query)
   res.send(result)
+});
+app.patch('/tuitions/:id', async (req, res) => {
+  const { id } = req.params;
+
+
+  const { _id, ...updatedFields } = req.body;
+
+  const result = await tuitions.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: updatedFields }
+  );
+
+  res.send(result);
 });
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
