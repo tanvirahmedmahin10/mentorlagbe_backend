@@ -26,8 +26,26 @@ app.get('/', (req, res) => {
   res.send('Hello World!');
 });
 app.get('/tuitions', async(req, res) => {
-  
-  const result=await tuitions.find({}).toArray()
+  const query={}
+  if(req.query){
+    if(req.query.subject){
+      query.subject=req.query.subject
+    }
+    if(req.query.classLevel){
+      query.classLevel=req.query.classLevel
+    }
+    if(req.query.teachingMode){
+      query.teachingMode=req.query.teachingMode
+    }
+    if (req.query.search) {
+  query.$or = [
+    { title: { $regex: req.query.search, $options: 'i' } },
+    { subject: { $regex: req.query.search, $options: 'i' } },
+    { teacher_name: { $regex: req.query.search, $options: 'i' } }
+  ];
+}
+  }
+  const result=await tuitions.find(query).toArray()
   res.send(result)
 });
 app.post('/tuitions', async(req, res) => {
