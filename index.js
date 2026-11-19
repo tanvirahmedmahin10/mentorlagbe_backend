@@ -20,10 +20,16 @@ export async function connectToMongoDB() {
 
 const db=await connectToMongoDB()
    const database = client.db("mentorlagbe");
+  const users=database.collection("user")
    const tuitions=database.collection('tuitions')
   const applications=database.collection('applications')
+   
 app.get('/', (req, res) => {
   res.send('Hello World!');
+});
+app.get('/users', async (req, res) => {
+const result = await users.find({}).toArray();
+  res.send(result);
 });
 app.get('/tuitions', async(req, res) => {
   const query={}
@@ -40,6 +46,9 @@ app.get('/tuitions', async(req, res) => {
     if (req.query.teacher_id) {
     query.teacher_id = req.query.teacher_id;
   }
+  if (req.query.status) {
+  query.status = req.query.status;
+}
     if (req.query.search) {
   query.$or = [
     { title: { $regex: req.query.search, $options: 'i' } },
@@ -57,14 +66,20 @@ app.get('/applications', async(req, res) => {
      if (req.query.student_id) {
     query.student_id = req.query.student_id;
   }
+     if (req.query.tuition_id) {
+    query.tuition_id = req.query.tuition_id;
+  }
    }
   const result=await applications.find(query).toArray()
   res.send(result)
 });
 
 app.post('/tuitions', async(req, res) => {
-  const query=req.body
-  const result=await tuitions.insertOne(query)
+  const tuitionData = {
+    status: "pending",
+    ...req.body,
+  };
+  const result=await tuitions.insertOne(tuitionData)
   res.send(result)
 });
 app.post('/applications', async(req, res) => {
@@ -81,6 +96,17 @@ app.patch('/tuitions/:id', async (req, res) => {
   const result = await tuitions.updateOne(
     { _id: new ObjectId(id) },
     { $set: updatedFields }
+  );
+
+  res.send(result);
+});
+app.patch('/applications/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const result = await applications.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status, updatedAt: new Date() } }
   );
 
   res.send(result);
@@ -105,6 +131,28 @@ app.delete('/applications/:id', async (req, res) => {
     res.send(result);
 
   
+});
+app.patch('/users/:id/role', async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  const result = await users.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { role, updatedAt: new Date() } }
+  );
+
+  res.send(result);
+});
+app.patch('/tuitions/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const result = await tuitions.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status, updatedAt: new Date() } }
+  );
+
+  res.send(result);
 });
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
