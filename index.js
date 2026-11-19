@@ -21,7 +21,7 @@ export async function connectToMongoDB() {
 const db=await connectToMongoDB()
    const database = client.db("mentorlagbe");
    const tuitions=database.collection('tuitions')
-
+  const applications=database.collection('applications')
 app.get('/', (req, res) => {
   res.send('Hello World!');
 });
@@ -51,9 +51,25 @@ app.get('/tuitions', async(req, res) => {
   const result=await tuitions.find(query).toArray()
   res.send(result)
 });
+app.get('/applications', async(req, res) => {
+  const query={}
+   if(req.query){
+     if (req.query.student_id) {
+    query.student_id = req.query.student_id;
+  }
+   }
+  const result=await applications.find(query).toArray()
+  res.send(result)
+});
+
 app.post('/tuitions', async(req, res) => {
   const query=req.body
   const result=await tuitions.insertOne(query)
+  res.send(result)
+});
+app.post('/applications', async(req, res) => {
+  const query=req.body
+  const result=await applications.insertOne(query)
   res.send(result)
 });
 app.patch('/tuitions/:id', async (req, res) => {
@@ -66,6 +82,16 @@ app.patch('/tuitions/:id', async (req, res) => {
     { _id: new ObjectId(id) },
     { $set: updatedFields }
   );
+
+  res.send(result);
+});
+app.get('/tuitions/:id', async (req, res) => {
+  const id=req.params.id
+  const query={_id: new ObjectId(id) }
+
+ 
+
+  const result = await tuitions.findOne(query)
 
   res.send(result);
 });
