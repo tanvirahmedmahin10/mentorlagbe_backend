@@ -95,6 +95,17 @@ app.get('/tuitions/:id', async (req, res) => {
 
   res.send(result);
 });
+app.delete('/applications/:id', async (req, res) => {
+  
+    const id = req.params.id;
+    const result = await applications.deleteOne({
+      _id: new ObjectId(id),
+      status: "pending",
+    });
+    res.send(result);
+
+  
+});
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
