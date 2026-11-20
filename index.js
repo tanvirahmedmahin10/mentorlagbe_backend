@@ -73,6 +73,19 @@ app.get('/applications', async(req, res) => {
   const result=await applications.find(query).toArray()
   res.send(result)
 });
+app.get('/applications/count', async(req, res) => {
+  const query={}
+   if(req.query){
+     if (req.query.student_id) {
+    query.student_id = req.query.student_id;
+  }
+     if (req.query.tuition_id) {
+    query.tuition_id = req.query.tuition_id;
+  }
+   }
+  const result=await applications.countDocuments(query)
+  res.send({count:result})
+});
 
 app.post('/tuitions', async(req, res) => {
   const tuitionData = {
@@ -131,6 +144,11 @@ app.delete('/applications/:id', async (req, res) => {
     res.send(result);
 
   
+});
+app.delete('/tuitions/:id', async (req, res) => {
+  const { id } = req.params;
+  const result = await tuitions.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
 });
 app.patch('/users/:id/role', async (req, res) => {
   const { id } = req.params;
