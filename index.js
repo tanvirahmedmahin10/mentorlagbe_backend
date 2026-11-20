@@ -23,6 +23,7 @@ const db=await connectToMongoDB()
   const users=database.collection("user")
    const tuitions=database.collection('tuitions')
   const applications=database.collection('applications')
+  const payments = database.collection('payments');
    
 app.get('/', (req, res) => {
   res.send('Hello World!');
@@ -99,6 +100,27 @@ app.post('/applications', async(req, res) => {
   const query=req.body
   const result=await applications.insertOne(query)
   res.send(result)
+});
+app.post('/payments/upgrade', async (req, res) => {
+  const { userId, userName, userEmail, role, amount } = req.body;
+
+  await users.updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { plan: "Pro", updatedAt: new Date() } }
+  );
+
+  const paymentRecord = await payments.insertOne({
+    userId,
+    userName,
+    userEmail,
+    role,
+    amount: Number(amount),
+    plan: "Pro",
+    status: "paid",
+    createdAt: new Date(),
+  });
+
+  res.send({ success: true, paymentId: paymentRecord.insertedId });
 });
 app.patch('/tuitions/:id', async (req, res) => {
   const { id } = req.params;
