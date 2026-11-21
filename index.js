@@ -70,7 +70,12 @@ const verifyStudent = (req, res, next) => {
   }
   next();
 };
-
+const verifyTutor = (req, res, next) => {
+  if (req.user?.role?.toLowerCase() !== "tutor") {
+    return res.status(403).send({ message: "Forbidden: Tutors only" });
+  }
+  next();
+};
 
 app.get('/', (req, res) => {
   res.send('Hello World!');
@@ -108,6 +113,18 @@ app.get('/tuitions', async(req, res) => {
   const result=await tuitions.find(query).toArray()
   res.send(result)
 });
+
+app.get('/tuitions/:id', async (req, res) => {
+  const id=req.params.id
+  const query={_id: new ObjectId(id) }
+
+ 
+
+  const result = await tuitions.findOne(query)
+
+  res.send(result);
+});
+
 app.get('/tuitions/count', async (req, res) => {
   const query = {};
   if (req.query.teacher_id) {
@@ -239,17 +256,8 @@ app.patch('/applications/:id/status', async (req, res) => {
 
   res.send(result);
 });
-app.get('/tuitions/:id', async (req, res) => {
-  const id=req.params.id
-  const query={_id: new ObjectId(id) }
 
- 
-
-  const result = await tuitions.findOne(query)
-
-  res.send(result);
-});
-app.delete('/applications/:id', async (req, res) => {
+app.delete('/applications/:id',verifyToken, verifyStudent, async (req, res) => {
   
     const id = req.params.id;
     const result = await applications.deleteOne({
