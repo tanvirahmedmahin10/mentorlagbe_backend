@@ -232,25 +232,33 @@ const updateResult=await users.updateOne(
 res.send({success:false,message:'payment failed'})
  
 });
-app.patch('/tuitions/:id', async (req, res) => {
+
+app.patch('/tuitions/:id', verifyToken, verifyTutor, async (req, res) => {
   const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Invalid tuition ID" });
+  }
 
-
-  const { _id, ...updatedFields } = req.body;
+  const { _id, teacher_id, ...updatedFields } = req.body;
 
   const result = await tuitions.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: updatedFields }
+    { _id: new ObjectId(id), teacher_id: req.user._id.toString() },
+    { $set: { ...updatedFields, updatedAt: new Date() } }
   );
 
   res.send(result);
 });
-app.patch('/applications/:id/status', async (req, res) => {
+
+app.patch('/applications/:id/status', verifyToken, verifyTutor, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
+  if (!ObjectId.isValid(id) || !["accepted", "rejected", "pending"].includes(status)) {
+    return res.status(400).send({ message: "Invalid application ID or status" });
+  }
+
   const result = await applications.updateOne(
-    { _id: new ObjectId(id) },
+    { _id: new ObjectId(id), teacher_id: req.user._id.toString() },
     { $set: { status, updatedAt: new Date() } }
   );
 
@@ -268,9 +276,15 @@ app.delete('/applications/:id',verifyToken, verifyStudent, async (req, res) => {
 
   
 });
-app.delete('/tuitions/:id', async (req, res) => {
+app.delete('/tuitions/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const result = await tuitions.deleteOne({ _id: new ObjectId(id) });
+  const query = { _id: new ObjectId(id) };
+
+  if (req.user.role?.toLowerCase() !== "admin") {
+    query.teacher_id = req.user._id.toString();
+  }
+
+  const result = await tuitions.deleteOne(query);
   res.send(result);
 });
 app.patch('/users/:id/role', async (req, res) => {
