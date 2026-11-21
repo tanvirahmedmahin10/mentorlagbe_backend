@@ -11,6 +11,12 @@ app.use(cors());
 app.use(express.json())
 const client = new MongoClient(process.env.MONGO_DB_URL)
 
+const myLogger=(req,res,next)=>{
+  console.log('now hitting api',req.url,req.query);
+  next()
+
+}
+
 export async function connectToMongoDB() {
   try {
     await client.connect();
@@ -28,6 +34,16 @@ const db=await connectToMongoDB()
   const applications=database.collection('applications')
   const payments = database.collection('payments');
    
+  const verifyToken=(req,res,next)=>{
+  const authHeader=req.headers.authorization
+  if(!authHeader){
+    res.send({status:401,message:"Unauthorized"})
+  }
+ const token=authHeader.split(' ')[1]
+ if(!token){
+  res.send({status:401,message:"Unauthorized"})
+ }
+}
 app.get('/', (req, res) => {
   res.send('Hello World!');
 });
@@ -72,7 +88,7 @@ app.get('/tuitions/count', async (req, res) => {
   const count = await tuitions.countDocuments(query);
   res.send({ count });
 });
-app.get('/applications', async(req, res) => {
+app.get('/applications',verifyToken, async(req, res) => {
   const query={}
    if(req.query){
      if (req.query.student_id) {
