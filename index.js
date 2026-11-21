@@ -33,16 +33,35 @@ const db=await connectToMongoDB()
    const tuitions=database.collection('tuitions')
   const applications=database.collection('applications')
   const payments = database.collection('payments');
+   const sessions=database.collection("session")
+
    
-  const verifyToken=(req,res,next)=>{
+  const verifyToken=async(req,res,next)=>{
   const authHeader=req.headers.authorization
   if(!authHeader){
-    res.send({status:401,message:"Unauthorized"})
+    res.status(401).send({message:"Unauthorized"})
+    return
   }
  const token=authHeader.split(' ')[1]
  if(!token){
-  res.send({status:401,message:"Unauthorized"})
+  res.status(401).send({message:"Unauthorized"})
+  return
  }
+ const query={token}
+ const session=await sessions.findOne(query)
+ if(!session){
+  res.status(401).send({message:"Unauthorized"})
+  return
+ }
+ const userId=session.userId
+ const userQuery={_id:new ObjectId(userId)}
+ const user=await users.findOne(userQuery)
+ if(!user){
+  res.status(401).send({message:"Unauthorized"})
+  return
+ }
+ req.user=user
+ next()
 }
 app.get('/', (req, res) => {
   res.send('Hello World!');
@@ -89,9 +108,16 @@ app.get('/tuitions/count', async (req, res) => {
   res.send({ count });
 });
 app.get('/applications',verifyToken, async(req, res) => {
+
   const query={}
+  const loggedInUserId = req.user._id.toString();
+  const userRole = req.user.role?.toLowerCase();
    if(req.query){
      if (req.query.student_id) {
+    
+    if (userRole !== 'admin' && req.query.student_id !== loggedInUserId) {
+      return res.status(403).send({ message: 'Forbidden: Access denied' });
+    }
     query.student_id = req.query.student_id;
   }
      if (req.query.tuition_id) {
