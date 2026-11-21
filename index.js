@@ -63,6 +63,15 @@ const db=await connectToMongoDB()
  req.user=user
  next()
 }
+
+const verifyStudent = (req, res, next) => {
+  if (req.user?.role?.toLowerCase() !== "student") {
+    return res.status(403).send({ message: "Forbidden: Students only" });
+  }
+  next();
+};
+
+
 app.get('/', (req, res) => {
   res.send('Hello World!');
 });
@@ -107,25 +116,25 @@ app.get('/tuitions/count', async (req, res) => {
   const count = await tuitions.countDocuments(query);
   res.send({ count });
 });
-app.get('/applications',verifyToken, async(req, res) => {
 
-  const query={}
-  const loggedInUserId = req.user._id.toString();
-  const userRole = req.user.role?.toLowerCase();
-   if(req.query){
-     if (req.query.student_id) {
-    
-    if (userRole !== 'admin' && req.query.student_id !== loggedInUserId) {
-      return res.status(403).send({ message: 'Forbidden: Access denied' });
-    }
-    query.student_id = req.query.student_id;
+app.get("/applications", verifyToken, verifyStudent, async (req, res) => {
+  const loggedInStudentId = req.user._id.toString();
+
+  if (req.query.student_id && req.query.student_id !== loggedInStudentId) {
+    return res.status(403).send({ message: "Forbidden: Access denied" });
   }
-     if (req.query.tuition_id) {
+
+
+  const query = {
+    student_id: loggedInStudentId,
+  };
+
+  if (req.query.tuition_id) {
     query.tuition_id = req.query.tuition_id;
   }
-   }
-  const result=await applications.find(query).toArray()
-  res.send(result)
+
+  const result = await applications.find(query).toArray();
+  res.send(result);
 });
 app.get('/applications/count', async(req, res) => {
   const query={}
@@ -155,7 +164,7 @@ app.post('/tuitions', async(req, res) => {
   const result=await tuitions.insertOne(tuitionData)
   res.send(result)
 });
-app.post('/applications', async(req, res) => {
+app.post('/applications', verifyToken, verifyStudent, async(req, res) => {
   const query=req.body
   const result=await applications.insertOne(query)
   res.send(result)
