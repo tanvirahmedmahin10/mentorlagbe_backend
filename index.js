@@ -123,18 +123,35 @@ app.get('/tuitions/count', async (req, res) => {
   res.send({ count });
 });
 
-app.get('/tuitions/:id', async (req, res) => {
-  const id=req.params.id
-  const query={_id: new ObjectId(id) }
+app.get("/tuitions/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Invalid tuition ID" });
+  }
 
- 
+  const tuition = await tuitions.findOne({ _id: new ObjectId(id) });
+  if (!tuition) {
+    return res.status(404).send(null);
+  }
 
-  const result = await tuitions.findOne(query)
+  let teacherBio = "";
+  let teacherImage = "";
 
-  res.send(result);
+  if (tuition.teacher_id && ObjectId.isValid(tuition.teacher_id)) {
+    const teacher = await users.findOne(
+      { _id: new ObjectId(tuition.teacher_id) },
+      { projection: { academicBio: 1, image: 1 } }
+    );
+    teacherBio = teacher?.academicBio || "";
+    teacherImage = teacher?.image || "";
+  }
+
+  res.send({
+    ...tuition,
+    teacherBio,
+    teacherImage,
+  });
 });
-
-
 
 app.get("/applications", verifyToken, async (req, res) => {
   const userId = req.user._id.toString();
@@ -175,7 +192,35 @@ app.get('/users/:id/premium', async(req, res) => {
  const result=await users.findOne(query,{projection:{premium:1}})
  res.send(result)
 });
+app.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
+  const allPayments = await payments
+    .find({})
+    .sort({ payment_date: -1 })
+    .toArray();
 
+  const allUsers = await users
+    .find({}, { projection: { name: 1, email: 1, role: 1 } })
+    .toArray();
+
+  const userMap = new Map(allUsers.map((u) => [u._id.toString(), u]));
+
+  const enrichedPayments = allPayments.map((payment) => {
+    const matchedUser = userMap.get(payment.userId);
+    const role = (payment.role || matchedUser?.role || "student").toLowerCase();
+    const isTutor = role === "tutor";
+
+    return {
+      ...payment,
+      userName: payment.userName || matchedUser?.name || "Unknown User",
+      customer_email: payment.customer_email || matchedUser?.email || "",
+      role: isTutor ? "Tutor" : "Student",
+      plan: payment.plan || (isTutor ? "Pro Tutor Plan" : "Pro Student Plan"),
+      amount: payment.amount ?? (isTutor ? 15 : 10),
+    };
+  });
+
+  res.send(enrichedPayments);
+});
 app.post('/tuitions', verifyToken, verifyTutor, async (req, res) => {
   const tuitionData = {
     status: "pending",
@@ -239,6 +284,33 @@ app.post('/payments/checkout_verify', verifyToken, async (req, res) => {
   }
 
   res.send({ success: false, message: 'Payment failed' });
+});
+
+
+
+app.patch("/users/profile", verifyToken, async (req, res) => {
+  const { name, image, phone, academicBio } = req.body;
+  const isTutor = req.user.role?.toLowerCase() === "tutor";
+
+  if (isTutor && !academicBio?.trim()) {
+    return res.status(400).send({
+      message: "Academic Bio / Teaching Experience is required for tutors.",
+    });
+  }
+
+  const updateFields = {
+    ...(name?.trim() && { name: name.trim() }),
+    ...(image !== undefined && { image: image.trim() }),
+    ...(phone !== undefined && { phone: phone.trim() }),
+    ...(academicBio !== undefined && { academicBio: academicBio.trim() }),
+    updatedAt: new Date(),
+  };
+
+  const result = await users.updateOne(
+    { _id: req.user._id },
+    { $set: updateFields }
+  );
+  res.send(result);
 });
 
 app.patch('/tuitions/:id', verifyToken, verifyTutor, async (req, res) => {
