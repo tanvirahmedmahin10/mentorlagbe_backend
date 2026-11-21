@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors'
 import 'dotenv/config'
 import { MongoClient,ObjectId } from 'mongodb';
+import Stripe from 'stripe';
+
+const stripe=new Stripe(process.env.STRIPE_SECRET_KEY)
 const app = express();
 const port = 8000;
 app.use(cors());
@@ -61,6 +64,14 @@ app.get('/tuitions', async(req, res) => {
   const result=await tuitions.find(query).toArray()
   res.send(result)
 });
+app.get('/tuitions/count', async (req, res) => {
+  const query = {};
+  if (req.query.teacher_id) {
+    query.teacher_id = req.query.teacher_id;
+  }
+  const count = await tuitions.countDocuments(query);
+  res.send({ count });
+});
 app.get('/applications', async(req, res) => {
   const query={}
    if(req.query){
@@ -87,6 +98,12 @@ app.get('/applications/count', async(req, res) => {
   const result=await applications.countDocuments(query)
   res.send({count:result})
 });
+app.get('/users/:id/premium', async(req, res) => {
+ const id=req.params.id
+ const query={_id:new ObjectId(id)}
+ const result=await users.findOne(query,{projection:{premium:1}})
+ res.send(result)
+});
 
 app.post('/tuitions', async(req, res) => {
   const tuitionData = {
@@ -101,26 +118,51 @@ app.post('/applications', async(req, res) => {
   const result=await applications.insertOne(query)
   res.send(result)
 });
-app.post('/payments/upgrade', async (req, res) => {
-  const { userId, userName, userEmail, role, amount } = req.body;
+app.post('/payments/checkout_verify', async (req, res) => {
+  const { sessionId } = req.body;
+ if(!sessionId){
+  return res.send({success:false,message:'SessionId requeired'})
+ }
+ const {
+    status,
+    customer_email,
+    metadata,
+    payment_intent,
+    payment_status
+  } = await stripe.checkout.sessions.retrieve(sessionId)
 
-  await users.updateOne(
-    { _id: new ObjectId(userId) },
-    { $set: { plan: "Pro", updatedAt: new Date() } }
-  );
+if (status === 'complete' && payment_status==='paid'){
+  const sessionQuery={sessionId}
+  const existingPayment=await payments.findOne(sessionQuery)
+  if(existingPayment){
+    return res.send({success:false,message:'Payment Already Done'})
+  }
+  const payment={
+  sessionId,
+  status,
+    customer_email,
+    payment_intent,
+    userId:metadata.userId,
+    payment_status,
+    payment_date:new Date()
+}
+const result=await payments.insertOne(payment)
 
-  const paymentRecord = await payments.insertOne({
-    userId,
-    userName,
-    userEmail,
-    role,
-    amount: Number(amount),
-    plan: "Pro",
-    status: "paid",
-    createdAt: new Date(),
-  });
+const query={_id:new ObjectId(metadata.userId)}
 
-  res.send({ success: true, paymentId: paymentRecord.insertedId });
+const updatedDoc={
+  $set:{
+    premium:true,
+  }
+}
+const updateResult=await users.updateOne(
+    query,
+  updatedDoc)
+ res.send({sucess:true,result,updateResult})
+ return
+ }
+res.send({success:false,message:'payment failed'})
+ 
 });
 app.patch('/tuitions/:id', async (req, res) => {
   const { id } = req.params;
