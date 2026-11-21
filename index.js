@@ -173,13 +173,15 @@ app.get('/users/:id/premium', async(req, res) => {
  res.send(result)
 });
 
-app.post('/tuitions', async(req, res) => {
+app.post('/tuitions', verifyToken, verifyTutor, async (req, res) => {
   const tuitionData = {
     status: "pending",
     ...req.body,
+    teacher_id: req.user._id.toString(),
   };
-  const result=await tuitions.insertOne(tuitionData)
-  res.send(result)
+
+  const result = await tuitions.insertOne(tuitionData);
+  res.send(result);
 });
 app.post('/applications', verifyToken, verifyStudent, async(req, res) => {
   const query=req.body
@@ -265,6 +267,29 @@ app.patch('/applications/:id/status', verifyToken, verifyTutor, async (req, res)
   res.send(result);
 });
 
+app.patch('/tuitions/:id/status', verifyToken, verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const result = await tuitions.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status, updatedAt: new Date() } }
+  );
+  res.send(result);
+});
+app.patch('/users/:id/role', async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  const result = await users.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { role, updatedAt: new Date() } }
+  );
+
+  res.send(result);
+});
+
+
 app.delete('/applications/:id',verifyToken, verifyStudent, async (req, res) => {
   
     const id = req.params.id;
@@ -287,28 +312,7 @@ app.delete('/tuitions/:id', verifyToken, async (req, res) => {
   const result = await tuitions.deleteOne(query);
   res.send(result);
 });
-app.patch('/users/:id/role', async (req, res) => {
-  const { id } = req.params;
-  const { role } = req.body;
 
-  const result = await users.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { role, updatedAt: new Date() } }
-  );
-
-  res.send(result);
-});
-app.patch('/tuitions/:id/status', async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  const result = await tuitions.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { status, updatedAt: new Date() } }
-  );
-
-  res.send(result);
-});
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
