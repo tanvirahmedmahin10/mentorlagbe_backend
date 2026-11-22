@@ -14,7 +14,6 @@ const client = new MongoClient(process.env.MONGO_DB_URL)
 export async function connectToMongoDB() {
   try {
     await client.connect();
-    console.log("You successfully connected to MongoDB!");
     return client;
   } catch (err) {
     console.dir(err);
@@ -83,6 +82,9 @@ app.get('/', (req, res) => {
 app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
   const result = await users.find({}).toArray();
   res.send(result);
+});
+app.get('/users/me', verifyToken, async (req, res) => {
+  res.send(req.user);
 });
 app.get('/tuitions', async(req, res) => {
   const query={}
@@ -189,8 +191,9 @@ app.get('/applications/count', async(req, res) => {
 app.get('/users/:id/premium', async(req, res) => {
  const id=req.params.id
  const query={_id:new ObjectId(id)}
- const result=await users.findOne(query,{projection:{premium:1}})
- res.send(result)
+ const result=await users.findOne(query,{projection:{premium:1,plan:1}})
+ const isPro=result?.plan==='pro'||result?.premium===true
+ res.send({premium:isPro,plan:isPro?'pro':'free'})
 });
 app.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
   const allPayments = await payments
@@ -222,6 +225,21 @@ app.get('/payments', verifyToken, verifyAdmin, async (req, res) => {
   res.send(enrichedPayments);
 });
 app.post('/tuitions', verifyToken, verifyTutor, async (req, res) => {
+  const isPro = req.user.plan === 'pro' || req.user.premium === true;
+
+  if (!isPro) {
+    const postedCount = await tuitions.countDocuments({
+      teacher_id: req.user._id.toString(),
+    });
+    if (postedCount >= 2) {
+      return res.status(403).send({
+        success: false,
+        message:
+          'Free plan allows only 2 tuition posts. Upgrade to Pro for unlimited posting.',
+      });
+    }
+  }
+
   const tuitionData = {
     status: "pending",
     ...req.body,
@@ -232,10 +250,43 @@ app.post('/tuitions', verifyToken, verifyTutor, async (req, res) => {
   res.send(result);
 });
 app.post('/applications', verifyToken, verifyStudent, async (req, res) => {
+  const studentId = req.user._id.toString();
+  const tuitionId = req.body.tuition_id;
+
+  if (!tuitionId) {
+    return res.status(400).send({ message: 'Tuition ID is required' });
+  }
+
+  const existingApplication = await applications.findOne({
+    tuition_id: tuitionId,
+    student_id: studentId,
+  });
+  if (existingApplication) {
+    return res.status(409).send({
+      success: false,
+      message: 'You have already applied for this tuition.',
+    });
+  }
+
+  const isPro = req.user.plan === 'pro' || req.user.premium === true;
+
+  if (!isPro) {
+    const appliedCount = await applications.countDocuments({
+      student_id: studentId,
+    });
+    if (appliedCount >= 2) {
+      return res.status(403).send({
+        success: false,
+        message:
+          'Free plan allows only 2 applications. Upgrade to Pro for unlimited applications.',
+      });
+    }
+  }
+
   const applicationData = {
     status: "pending",
     ...req.body,
-    student_id: req.user._id.toString(),
+    student_id: studentId,
   };
   const result = await applications.insertOne(applicationData);
   res.send(result);
@@ -252,6 +303,8 @@ app.post('/payments/checkout_verify', verifyToken, async (req, res) => {
     metadata,
     payment_intent,
     payment_status,
+    amount_total,
+    currency,
   } = await stripe.checkout.sessions.retrieve(sessionId);
 
   if (metadata?.userId !== req.user._id.toString()) {
@@ -270,6 +323,10 @@ app.post('/payments/checkout_verify', verifyToken, async (req, res) => {
       customer_email,
       payment_intent,
       userId: metadata.userId,
+      role: metadata.role || req.user.role,
+      plan: 'pro',
+      amount: amount_total ? amount_total / 100 : undefined,
+      currency: currency?.toUpperCase(),
       payment_status,
       payment_date: new Date(),
     };
@@ -277,7 +334,7 @@ app.post('/payments/checkout_verify', verifyToken, async (req, res) => {
 
     const updateResult = await users.updateOne(
       { _id: new ObjectId(metadata.userId) },
-      { $set: { premium: true } }
+      { $set: { premium: true, plan: "pro" } }
     );
 
     return res.send({ success: true, result, updateResult });
@@ -388,7 +445,9 @@ app.delete('/tuitions/:id', verifyToken, async (req, res) => {
   res.send(result);
 });
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
-});
+if (process.env.VERCEL !== '1') {
+  const runtimePort = process.env.PORT || port;
+  app.listen(runtimePort, () => {
+  });
+}
 export default app;
