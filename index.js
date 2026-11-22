@@ -15,8 +15,8 @@ export async function connectToMongoDB() {
   try {
     await client.connect();
     return client;
-  } catch (err) {
-    console.dir(err);
+  } catch {
+    return null;
   }
 }
 
